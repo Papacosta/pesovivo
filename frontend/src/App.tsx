@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Layout from "./components/Layout";
 import Toaster from "./components/Toaster";
-import Home from "./pages/Home";
 import NovaColeta from "./pages/NovaColeta";
 import Painel from "./pages/Painel";
 import Animais from "./pages/Animais";
@@ -9,12 +8,14 @@ import Pontos from "./pages/Pontos";
 import Ajustes from "./pages/Ajustes";
 import Modelo from "./pages/Modelo";
 import Passagem from "./pages/Passagem";
+import NaMao from "./pages/NaMao";
 import { APP_NAME } from "./lib/brand";
 import { unsavedWork, setUnsavedWork } from "./lib/navGuard";
+import { localSettings } from "./lib/queue";
 
 const PAGES: Record<string, { title: string; render: () => JSX.Element }> = {
-  "/": { title: "Início", render: () => <Home /> },
-  "/passagem": { title: "Pesar animais", render: () => <Passagem /> },
+  "/passagem": { title: "Pesar no corredor", render: () => <Passagem /> },
+  "/na-mao": { title: "Pesar na mão", render: () => <NaMao /> },
   "/coletar": { title: "Coletar com balança", render: () => <NovaColeta /> },
   "/painel": { title: "Painel", render: () => <Painel /> },
   "/animais": { title: "Animais", render: () => <Animais /> },
@@ -23,9 +24,10 @@ const PAGES: Record<string, { title: string; render: () => JSX.Element }> = {
   "/modelo": { title: "Modelo e estimativa", render: () => <Modelo /> },
 };
 
+/** Sem endereço (ou "#/"), o app abre direto no último modo de pesar usado. */
 function currentRoute(): string {
   const hash = window.location.hash.replace(/^#/, "");
-  return PAGES[hash] ? hash : "/";
+  return PAGES[hash] ? hash : `/${localSettings.weighMode}`;
 }
 
 export default function App() {

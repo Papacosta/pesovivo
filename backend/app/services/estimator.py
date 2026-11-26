@@ -17,7 +17,12 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GroupKFold
 
-from .features import MASK_FEATURE_NAMES
+from .features import (
+    MASK_FEATURE_NAMES,
+    METRIC_FEATURE_NAMES,
+    SCALE_FREE_FEATURE_NAMES,
+    metric_features,
+)
 from .metrics import interval_half_width, summarize
 
 # Características numéricas: máscara + sensores + cadastro.
@@ -31,6 +36,16 @@ NUMERIC_FEATURES = MASK_FEATURE_NAMES + [
 CATEGORICAL_FEATURES = ["breed", "sex", "category"]
 FEATURE_NAMES = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
+# Conjunto "portátil": só medidas em cm e proporções, sem nada que dependa de
+# onde a câmera estava. Treinado com as fotos do celular fixo (distância
+# medida) e usado nas fotos na mão (distância estimada pela geometria).
+PORTABLE_NUMERIC_FEATURES = METRIC_FEATURE_NAMES + SCALE_FREE_FEATURE_NAMES + [
+    "age_months",
+    "bcs",
+]
+PORTABLE_FEATURE_NAMES = PORTABLE_NUMERIC_FEATURES + CATEGORICAL_FEATURES
+FEATURE_SETS = {"full": NUMERIC_FEATURES, "portable": PORTABLE_NUMERIC_FEATURES}
+
 
 def build_feature_row(
     mask_features: Dict[str, float],
@@ -38,6 +53,7 @@ def build_feature_row(
     sensors: Optional[Dict[str, Any]] = None,
     animal: Optional[Dict[str, Any]] = None,
     capture_point: Optional[Dict[str, Any]] = None,
+    cm_per_px: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Monta uma linha de features a partir das partes heterogêneas.
 
@@ -45,6 +61,10 @@ def build_feature_row(
     do banco. Valores ausentes viram None -> imputados pela mediana no treino.
     """
     row: Dict[str, Any] = {name: mask_features.get(name) for name in MASK_FEATURE_NAMES}
+    if "length_px" in mask_features:
+        row.update(metric_features(mask_features, cm_per_px))
+    else:
+        row.update({name: None for name in METRIC_FEATURE_NAMES})
 
     sensors = sensors or {}
     orientation = sensors.get("orientation") or {}
@@ -66,12 +86,18 @@ def build_feature_row(
 class FeatureEncoder:
     """Imputação + padronização + one-hot, sem depender de pandas."""
 
-    def __init__(self) -> None:
+    def __init__(self, numeric: Optional[Sequence[str]] = None) -> None:
+        self.numeric: List[str] = list(numeric or NUMERIC_FEATURES)
         self.medians: Dict[str, float] = {}
         self.categories: Dict[str, List[str]] = {}
 
+    @property
+    def numeric_names(self) -> List[str]:
+        # Artefatos antigos não têm `numeric`: usavam a lista completa.
+        return getattr(self, "numeric", None) or NUMERIC_FEATURES
+
     def fit(self, rows: Sequence[Dict[str, Any]]) -> "FeatureEncoder":
-        for name in NUMERIC_FEATURES:
+        for name in self.numeric_names:
             values = [float(r[name]) for r in rows if r.get(name) is not None]
             self.medians[name] = float(np.median(values)) if values else 0.0
 
@@ -84,7 +110,7 @@ class FeatureEncoder:
         out: List[List[float]] = []
         for r in rows:
             vec: List[float] = []
-            for name in NUMERIC_FEATURES:
+            for name in self.numeric_names:
                 v = r.get(name)
                 vec.append(float(v) if v is not None and not _is_nan(v) else self.medians[name])
             for name in CATEGORICAL_FEATURES:
@@ -97,7 +123,7 @@ class FeatureEncoder:
 
     @property
     def output_dim(self) -> int:
-        return len(NUMERIC_FEATURES) + sum(len(v) for v in self.categories.values())
+        return len(self.numeric_names) + sum(len(v) for v in self.categories.values())
 
 
 def _is_nan(value: Any) -> bool:
@@ -124,17 +150,23 @@ class _SklearnEstimator(WeightEstimator):
 
     name = "sklearn"
 
-    def __init__(self) -> None:
+    def __init__(self, feature_set: str = "full") -> None:
+        if feature_set not in FEATURE_SETS:
+            raise ValueError(f"Conjunto de features desconhecido: {feature_set}")
+        self.feature_set = feature_set
         self.encoder: Optional[FeatureEncoder] = None
         self.model: Any = None
         self.metrics: Dict[str, Any] = {}
-        self.feature_names: List[str] = FEATURE_NAMES
+        self.feature_names: List[str] = list(FEATURE_SETS[feature_set]) + CATEGORICAL_FEATURES
+
+    def _new_encoder(self) -> FeatureEncoder:
+        return FeatureEncoder(FEATURE_SETS[self.feature_set])
 
     def _make_model(self):
         raise NotImplementedError
 
     def fit(self, rows, y):
-        self.encoder = FeatureEncoder().fit(rows)
+        self.encoder = self._new_encoder().fit(rows)
         self.model = self._make_model()
         self.model.fit(self.encoder.transform(rows), np.asarray(y, dtype=float))
         return self
@@ -176,7 +208,7 @@ class _SklearnEstimator(WeightEstimator):
         ):
             train_rows = [rows[i] for i in train_idx]
             test_rows = [rows[i] for i in test_idx]
-            encoder = FeatureEncoder().fit(train_rows)
+            encoder = self._new_encoder().fit(train_rows)
             model = self._make_model()
             model.fit(encoder.transform(train_rows), oof_true[train_idx])
 
@@ -212,6 +244,7 @@ class _SklearnEstimator(WeightEstimator):
             {
                 "kind": "weight_estimator",
                 "name": self.name,
+                "feature_set": self.feature_set,
                 "encoder": self.encoder,
                 "model": self.model,
                 "metrics": self.metrics,
@@ -223,7 +256,7 @@ class _SklearnEstimator(WeightEstimator):
     @classmethod
     def load(cls, path: str) -> "_SklearnEstimator":
         data = joblib.load(path)
-        obj = cls()
+        obj = cls(feature_set=data.get("feature_set", "full"))
         obj.encoder = data["encoder"]
         obj.model = data["model"]
         obj.metrics = data.get("metrics", {})
@@ -234,8 +267,8 @@ class _SklearnEstimator(WeightEstimator):
 class RidgeWeightEstimator(_SklearnEstimator):
     name = "ridge"
 
-    def __init__(self, alpha: float = 1.0) -> None:
-        super().__init__()
+    def __init__(self, alpha: float = 1.0, feature_set: str = "full") -> None:
+        super().__init__(feature_set)
         self.alpha = alpha
 
     def _make_model(self):
@@ -245,8 +278,8 @@ class RidgeWeightEstimator(_SklearnEstimator):
 class GradientBoostingWeightEstimator(_SklearnEstimator):
     name = "gboost"
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, feature_set: str = "full") -> None:
+        super().__init__(feature_set)
 
     def _make_model(self):
         return HistGradientBoostingRegressor(
@@ -265,10 +298,10 @@ ESTIMATORS = {
 }
 
 
-def create_estimator(algorithm: str = "ridge") -> _SklearnEstimator:
+def create_estimator(algorithm: str = "ridge", feature_set: str = "full") -> _SklearnEstimator:
     if algorithm not in ESTIMATORS:
         raise ValueError(f"Algoritmo desconhecido: {algorithm}. Use 'ridge' ou 'gboost'.")
-    return ESTIMATORS[algorithm]()
+    return ESTIMATORS[algorithm](feature_set=feature_set)
 
 
 def load_estimator(path: str) -> _SklearnEstimator:

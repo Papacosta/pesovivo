@@ -3,6 +3,8 @@
 - POST /api/passages: recebe os quadros que o celular capturou
   automaticamente durante uma passagem, salva em disco e estima o peso
   (mediana dos quadros). Idempotente pelo `passage_id` gerado no cliente.
+- `mode=handheld`: celular na mão (sem ponto fixo); a faixa de erro é maior.
+- PUT /api/passages/{id}/feedback: resposta a "Saiu como esperado?".
 - Sem modelo ativo a passagem fica `pending_model` e pode ser reestimada
   depois com POST /api/passages/reestimate.
 """
@@ -21,7 +23,13 @@ from sqlalchemy.orm import Session, selectinload
 from ..config import settings
 from ..database import get_db
 from ..models import Animal, CapturePoint, Passage, PassageFrame
-from ..schemas import PassageDetailOut, PassageOut, PassageReestimateOut
+from ..schemas import (
+    PASSAGE_MODES,
+    PassageDetailOut,
+    PassageFeedbackIn,
+    PassageOut,
+    PassageReestimateOut,
+)
 from ..services import image_quality as iq
 from ..services.passages import estimate_passage
 from ..services.storage import decode_image, photo_abs_path, save_photo
@@ -55,7 +63,9 @@ def _load(db: Session, passage_id: str) -> Optional[Passage]:
 @router.post("", response_model=PassageDetailOut, status_code=201)
 async def create_passage(
     frames: List[UploadFile] = File(...),
-    capture_point_id: str = Form(...),
+    capture_point_id: Optional[str] = Form(default=None),
+    mode: str = Form(default="fixed"),
+    category: Optional[str] = Form(default=None),
     passage_id: Optional[str] = Form(default=None),
     started_at: Optional[str] = Form(default=None),
     ended_at: Optional[str] = Form(default=None),
@@ -70,8 +80,17 @@ async def create_passage(
         if existing:
             return existing
 
-    if not db.get(CapturePoint, capture_point_id):
-        raise HTTPException(status_code=422, detail="Ponto de captura não encontrado.")
+    if mode not in PASSAGE_MODES:
+        raise HTTPException(status_code=422, detail="Modo inválido (use 'fixed' ou 'handheld').")
+    capture_point_id = _clean(capture_point_id)
+    if mode == "fixed":
+        if not capture_point_id or not db.get(CapturePoint, capture_point_id):
+            raise HTTPException(status_code=422, detail="Ponto de captura não encontrado.")
+    elif capture_point_id and not db.get(CapturePoint, capture_point_id):
+        capture_point_id = None  # na mão o ponto é só informativo
+    cat = (_clean(category) or "").lower() or None
+    if cat and len(cat) > 30:
+        raise HTTPException(status_code=422, detail="Categoria muito longa.")
     if not frames:
         raise HTTPException(status_code=422, detail="Envie ao menos 1 quadro.")
     if len(frames) > settings.max_frames_per_passage:
@@ -94,8 +113,10 @@ async def create_passage(
 
     passage = Passage(
         id=passage_id or str(uuid.uuid4()),
+        mode=mode,
         capture_point_id=capture_point_id,
         animal_id=animal.id if animal else None,
+        category=cat,
         ear_tag=tag,
         lot=_clean(lot),
         started_at=_parse_dt(started_at, "started_at") or utcnow(),
@@ -203,6 +224,19 @@ def reestimate_one(passage_id: str, db: Session = Depends(get_db)):
     estimate_passage(db, passage)
     db.commit()
     return _load(db, passage_id)
+
+
+@router.put("/{passage_id}/feedback", response_model=PassageOut)
+def set_feedback(passage_id: str, payload: PassageFeedbackIn, db: Session = Depends(get_db)):
+    """Registra "Saiu como esperado?" (ok | low | high). `null` apaga a resposta."""
+    passage = db.get(Passage, passage_id)
+    if not passage:
+        raise HTTPException(status_code=404, detail="Passagem não encontrada.")
+    passage.feedback = payload.feedback
+    passage.feedback_at = utcnow() if payload.feedback else None
+    db.commit()
+    db.refresh(passage)
+    return passage
 
 
 @router.get("/frames/{frame_id}/file")

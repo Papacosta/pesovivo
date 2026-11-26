@@ -15,8 +15,14 @@ from .estimator import (
     load_estimator,
 )
 from .features import extract_mask_features
+from .geometry import GeometryError, fixed_point_cm_per_px, geometry_from_mask
 from .image_quality import mask_touches_border
 from .segmentation import get_segmenter
+
+
+# Comprimento plausível da silhueta de um bovino (cabeça ao rabo, de lado).
+MIN_BODY_LENGTH_CM = 80.0
+MAX_BODY_LENGTH_CM = 420.0
 
 
 class EstimationUnavailableError(RuntimeError):
@@ -51,7 +57,8 @@ class EstimationContext:
     o artefato do modelo a cada foto.
     """
 
-    def __init__(self, db, capture_point_id: str):
+    def __init__(self, db, capture_point_id: Optional[str], mode: str = "fixed"):
+        self.mode = mode
         self.model = get_active_model(db)
         self.segmenter = get_segmenter()
         if self.segmenter.name == "none":
@@ -59,15 +66,32 @@ class EstimationContext:
                 "Segmentação desativada no servidor (SEGMENTATION_ENABLED=false).",
                 503,
             )
-        cp = db.get(CapturePoint, capture_point_id)
-        if not cp:
-            raise EstimationUnavailableError("Ponto de captura não encontrado.", 422)
-        self.capture_point = {
-            "distance_cm": cp.distance_cm,
-            "camera_height_cm": cp.camera_height_cm,
-        }
-        self.estimator = load_estimator(self.model.artifact_path)
-        self.half_width = float(self.model.metrics.get("interval_half_width_kg", 15.0))
+        if capture_point_id is None:
+            # Celular na mão: distância e altura desconhecidas. O encoder
+            # imputa a mediana do treino (a faixa é alargada por quem chama).
+            self.capture_point: Dict[str, Any] = {"distance_cm": None, "camera_height_cm": None}
+        else:
+            cp = db.get(CapturePoint, capture_point_id)
+            if not cp:
+                raise EstimationUnavailableError("Ponto de captura não encontrado.", 422)
+            self.capture_point = {
+                "distance_cm": cp.distance_cm,
+                "camera_height_cm": cp.camera_height_cm,
+            }
+        if mode == "handheld":
+            # Foto na mão: modelo "portátil" (medidas em cm + proporções).
+            portable = (self.model.metrics or {}).get("portable") or {}
+            if not portable.get("artifact_path"):
+                raise EstimationUnavailableError(
+                    "O modelo ativo é anterior à foto na mão. Treine o modelo de novo "
+                    "(tela Modelo) para calcular estas pesagens.",
+                    409,
+                )
+            self.estimator = load_estimator(portable["artifact_path"])
+            self.half_width = float(portable.get("interval_half_width_kg") or 25.0)
+        else:
+            self.estimator = load_estimator(self.model.artifact_path)
+            self.half_width = float(self.model.metrics.get("interval_half_width_kg", 15.0))
 
     def estimate(
         self,
@@ -75,6 +99,7 @@ class EstimationContext:
         animal: Optional[Dict[str, Any]] = None,
         *,
         reject_border: bool = False,
+        camera: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Estima um quadro. Levanta EstimationUnavailableError (422) se não houver bovino."""
         mask = self.segmenter.segment(image_bgr)
@@ -90,14 +115,34 @@ class EstimationContext:
             )
         h, w = image_bgr.shape[:2]
         mask_feats = extract_mask_features(mask, w, h)
+        geometry: Optional[Dict[str, Any]] = None
+        capture_point = self.capture_point
+        if self.mode == "handheld":
+            try:
+                geo = geometry_from_mask(mask, camera or {})
+            except GeometryError as exc:
+                raise EstimationUnavailableError(str(exc), 422) from exc
+            cm_per_px = geo.cm_per_px
+            geometry = geo.as_dict()
+            capture_point = {"distance_cm": geo.ground_distance_cm, "camera_height_cm": geo.phone_height_cm}
+            length_cm = mask_feats["length_px"] * cm_per_px
+            if not (MIN_BODY_LENGTH_CM <= length_cm <= MAX_BODY_LENGTH_CM):
+                raise EstimationUnavailableError(
+                    f"Medida incoerente ({length_cm:.0f} cm de comprimento): o chão entre você e o "
+                    "animal pode ser inclinado, ou o animal não está inteiro na foto.",
+                    422,
+                )
+        else:
+            cm_per_px = fixed_point_cm_per_px(self.capture_point.get("distance_cm"), w, h)
         row = build_feature_row(
             mask_feats,
             sensors=None,
             animal=animal or {},
-            capture_point=self.capture_point,
+            capture_point=capture_point,
+            cm_per_px=cm_per_px,
         )
         weight = float(self.estimator.predict([row])[0])
-        return {"weight_kg": weight, "features": row}
+        return {"weight_kg": weight, "features": row, "geometry": geometry}
 
 
 def estimate_photo(

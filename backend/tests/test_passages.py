@@ -58,3 +58,23 @@ def test_robust_sigma():
     assert robust_sigma([]) == 0.0
     assert robust_sigma([1.0, 1.0, 1.0]) == 0.0
     assert robust_sigma([1.0, 2.0, 3.0, 4.0, 100.0]) == pytest.approx(1.4826, rel=1e-3)
+
+
+def test_faixa_maior_com_celular_na_mao():
+    from app.services.passages import HANDHELD_INTERVAL_FACTOR, passage_half_width
+
+    assert passage_half_width(20.0, "fixed") == 20.0
+    assert passage_half_width(20.0, "handheld") == pytest.approx(20.0 * HANDHELD_INTERVAL_FACTOR)
+
+
+def test_categoria_escolhida_so_completa_o_cadastro():
+    from types import SimpleNamespace
+
+    from app.services.passages import animal_features
+
+    assert animal_features(None, "novilha") == {"category": "novilha"}
+    assert animal_features(None, None) == {}
+    animal = SimpleNamespace(breed="nelore", sex="macho", category="boi", age_months=24, bcs=None)
+    assert animal_features(animal, "bezerro")["category"] == "boi"
+    animal.category = None
+    assert animal_features(animal, "bezerro")["category"] == "bezerro"

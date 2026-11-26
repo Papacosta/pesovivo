@@ -89,3 +89,34 @@ MASK_FEATURE_NAMES = [
     "centroid_x",
     "centroid_y",
 ]
+
+
+# Medidas em centímetros (exigem escala cm/pixel: distância conhecida ou
+# estimada pela geometria do chão). Independem de zoom e distância, por isso
+# servem tanto para o celular fixo quanto para a foto na mão.
+METRIC_FEATURE_NAMES = [
+    "length_cm",
+    "body_height_cm",
+    "thorax_height_cm",
+    "area_m2",
+]
+
+# Proporções da silhueta que não mudam com distância nem zoom.
+SCALE_FREE_FEATURE_NAMES = [
+    "length_height_ratio",
+    "thorax_height_ratio",
+    "fill_ratio",
+]
+
+
+def metric_features(mask_features: Dict[str, float], cm_per_px: float | None) -> Dict[str, float | None]:
+    """Converte as medidas em pixels para centímetros com a escala dada."""
+    if not cm_per_px or cm_per_px <= 0:
+        return {name: None for name in METRIC_FEATURE_NAMES}
+    s = float(cm_per_px)
+    return {
+        "length_cm": mask_features["length_px"] * s,
+        "body_height_cm": mask_features["body_height_px"] * s,
+        "thorax_height_cm": mask_features["thorax_height_px"] * s,
+        "area_m2": mask_features["area_px"] * s * s / 10_000.0,
+    }

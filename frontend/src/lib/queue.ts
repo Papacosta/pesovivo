@@ -86,7 +86,9 @@ export async function syncQueue(): Promise<SyncResult> {
       } else if (item.kind === "passage") {
         await api.createPassage({
           passageId: item.id,
+          mode: item.mode ?? "fixed",
           capturePointId: item.capturePointId,
+          category: item.category ?? null,
           startedAt: item.startedAt,
           endedAt: item.endedAt,
           earTag: item.earTag,
@@ -161,6 +163,45 @@ export const localSettings = {
   },
   set maxTilt(value: number) {
     localStorage.setItem("gado:maxTilt", String(value));
+  },
+  /** Rendimento de carcaça (%) usado para converter peso vivo em arrobas. */
+  get carcassYield(): number {
+    const v = Number(localStorage.getItem("gado:carcassYield") ?? "50");
+    return Number.isFinite(v) && v >= 30 && v <= 70 ? v : 50;
+  },
+  set carcassYield(value: number) {
+    localStorage.setItem("gado:carcassYield", String(value));
+  },
+  /** Altura (cm) em que a pessoa segura o celular ao fotografar na mão. */
+  get phoneHeightCm(): number {
+    const v = Number(localStorage.getItem("gado:phoneHeightCm") ?? "140");
+    return Number.isFinite(v) && v >= 60 && v <= 220 ? v : 140;
+  },
+  set phoneHeightCm(value: number) {
+    localStorage.setItem("gado:phoneHeightCm", String(value));
+  },
+  /** Lente principal em mm equivalentes (35 mm). Celulares: ~24 a 28 mm. */
+  get focalEqMm(): number {
+    const v = Number(localStorage.getItem("gado:focalEqMm") ?? "26");
+    return Number.isFinite(v) && v >= 13 && v <= 50 ? v : 26;
+  },
+  set focalEqMm(value: number) {
+    localStorage.setItem("gado:focalEqMm", String(value));
+  },
+  /** Modo de pesar usado por último: o app abre direto nele. */
+  get weighMode(): "na-mao" | "passagem" {
+    return localStorage.getItem("gado:weighMode") === "passagem" ? "passagem" : "na-mao";
+  },
+  set weighMode(value: "na-mao" | "passagem") {
+    localStorage.setItem("gado:weighMode", value);
+  },
+  /** Categoria escolhida por último antes de pesar. */
+  get passageCategory(): string {
+    return localStorage.getItem("gado:passageCategory") ?? "";
+  },
+  set passageCategory(value: string) {
+    if (value) localStorage.setItem("gado:passageCategory", value);
+    else localStorage.removeItem("gado:passageCategory");
   },
   get capturePointId(): string | null {
     return localStorage.getItem("gado:capturePointId");

@@ -7,6 +7,8 @@ import type {
   ModelStatus,
   ModelVersion,
   Passage,
+  PassageFeedback,
+  PassageMode,
   PassageQueuedFrame,
   Weighing,
 } from "./types";
@@ -157,7 +159,9 @@ export const api = {
   // Modo passagem --------------------------------------------------------
   createPassage: async (args: {
     passageId: string;
-    capturePointId: string;
+    mode: PassageMode;
+    capturePointId: string | null;
+    category: string | null;
     startedAt: string;
     endedAt: string;
     earTag: string | null;
@@ -166,7 +170,9 @@ export const api = {
   }): Promise<Passage> => {
     const form = new FormData();
     form.append("passage_id", args.passageId);
-    form.append("capture_point_id", args.capturePointId);
+    form.append("mode", args.mode);
+    if (args.capturePointId) form.append("capture_point_id", args.capturePointId);
+    if (args.category) form.append("category", args.category);
     form.append("started_at", args.startedAt);
     form.append("ended_at", args.endedAt);
     if (args.earTag) form.append("ear_tag", args.earTag);
@@ -195,6 +201,8 @@ export const api = {
     if (params.lot) q.set("lot", params.lot);
     return request<Passage[]>(`/api/passages?${q.toString()}`);
   },
+  setPassageFeedback: (id: string, feedback: PassageFeedback | null) =>
+    request<Passage>(`/api/passages/${id}/feedback`, { method: "PUT", body: JSON.stringify({ feedback }) }),
   reestimatePassages: () =>
     request<{ processed: number; estimated: number; still_pending: number }>("/api/passages/reestimate", {
       method: "POST",

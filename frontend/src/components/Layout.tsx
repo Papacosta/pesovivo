@@ -10,8 +10,8 @@ interface LayoutProps {
 
 /** Navegação principal. `match` inclui telas filhas (ex.: Modelo fica em Painel). */
 export const NAV = [
-  { path: "/", label: "Início", icon: "home", match: ["/"] },
-  { path: "/passagem", label: "Pesar", icon: "scale", match: ["/passagem"] },
+  // "/" abre o último modo de pesar usado (na mão ou no corredor).
+  { path: "/", label: "Pesar", icon: "scale", match: ["/passagem", "/na-mao"] },
   { path: "/coletar", label: "Coletar", icon: "camera", match: ["/coletar"] },
   { path: "/painel", label: "Painel", icon: "chart", match: ["/painel", "/modelo"] },
   { path: "/animais", label: "Animais", icon: "tag", match: ["/animais"] },
@@ -140,7 +140,7 @@ export default function Layout({ route, children }: LayoutProps) {
           zIndex: 50,
         }}
       >
-        <a href="#/" style={{ color: "#fff" }} aria-label={`${APP_NAME}, ir para o início`}>
+        <a href="#/" style={{ color: "#fff" }} aria-label={`${APP_NAME}, ir para Pesar`}>
           <div style={{ fontWeight: 800, fontSize: "1.15rem", letterSpacing: 0.2 }}>{APP_NAME}</div>
           <div style={{ fontSize: "0.78rem", opacity: 0.9 }}>{APP_TAGLINE}</div>
         </a>

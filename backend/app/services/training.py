@@ -21,6 +21,7 @@ from ..config import settings
 from ..models import Animal, CapturePoint, ModelVersion, Photo, Weighing
 from .estimator import FEATURE_NAMES, build_feature_row, create_estimator
 from .features import extract_mask_features
+from .geometry import fixed_point_cm_per_px
 from .image_quality import mask_touches_border
 from .segmentation import get_segmenter
 from .storage import photo_abs_path
@@ -92,6 +93,7 @@ def load_training_dataset(db: Session) -> TrainingDataset:
             continue
 
         cp_id = photo.capture_point_id or weighing.capture_point_id
+        cp = capture_points.get(cp_id)
         row = build_feature_row(
             mask_feats,
             sensors=photo.sensors,
@@ -102,7 +104,8 @@ def load_training_dataset(db: Session) -> TrainingDataset:
                 "age_months": animal.age_months,
                 "bcs": animal.bcs,
             },
-            capture_point=capture_points.get(cp_id),
+            capture_point=cp,
+            cm_per_px=fixed_point_cm_per_px(cp["distance_cm"] if cp else None, w, h),
         )
         dataset.rows.append(row)
         dataset.y.append(float(weighing.weight_kg))
@@ -140,6 +143,11 @@ def train_model(
     settings.models_dir.mkdir(parents=True, exist_ok=True)
     estimator.save(str(artifact_path))
 
+    # Modelo "portátil" (medidas em cm + proporções) para as fotos na mão.
+    portable = _train_portable(dataset, algorithm, version)
+    if portable:
+        metrics = {**metrics, "portable": portable}
+
     if activate:
         db.execute(update(ModelVersion).values(active=False))
 
@@ -158,6 +166,33 @@ def train_model(
     db.commit()
     db.refresh(model)
     return model
+
+
+def _train_portable(dataset: TrainingDataset, algorithm: str, version: str) -> Dict[str, Any] | None:
+    """Treina o modelo usado no modo na mão. Só fotos com escala conhecida entram.
+
+    Devolve o resumo para guardar em `metrics["portable"]`, ou None se não houver
+    animais suficientes com ponto de captura (distância medida).
+    """
+    idx = [i for i, r in enumerate(dataset.rows) if r.get("length_cm") is not None]
+    groups = [dataset.groups[i] for i in idx]
+    if len(set(groups)) < max(3, min(settings.min_animals_for_model, 10)):
+        return None
+    rows = [dataset.rows[i] for i in idx]
+    y = [dataset.y[i] for i in idx]
+    estimator = create_estimator(algorithm, feature_set="portable")
+    cv = estimator.cross_validate(rows, y, groups)
+    estimator.fit(rows, y)
+    path = settings.models_dir / f"{version}-portable.joblib"
+    estimator.save(str(path))
+    return {
+        "artifact_path": str(path),
+        "mae_kg": cv.get("mae_kg"),
+        "mape_pct": cv.get("mape_pct"),
+        "interval_half_width_kg": cv.get("interval_half_width_kg"),
+        "n_photos": len(rows),
+        "n_animals": len(set(groups)),
+    }
 
 
 def model_status(db: Session) -> Dict[str, Any]:

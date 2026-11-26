@@ -216,7 +216,10 @@ export type QueueItem =
       kind: "passage";
       id: string;
       createdAt: number;
-      capturePointId: string;
+      /** Ausente em itens antigos da fila: tratar como "fixed". */
+      mode?: PassageMode;
+      capturePointId: string | null;
+      category?: string | null;
       startedAt: string;
       endedAt: string;
       earTag: string | null;
@@ -230,10 +233,16 @@ export interface PassageQueuedFrame {
   detection: Record<string, unknown>;
 }
 
+export type PassageMode = "fixed" | "handheld";
+/** "Saiu como esperado?": ok = sim; low = achei baixo; high = achei alto. */
+export type PassageFeedback = "ok" | "low" | "high";
+
 export interface Passage {
   id: string;
-  capture_point_id: string;
+  mode: PassageMode;
+  capture_point_id: string | null;
   animal_id: string | null;
+  category: string | null;
   ear_tag: string | null;
   lot: string | null;
   started_at: string;
@@ -249,5 +258,7 @@ export interface Passage {
   n_frames_used: number;
   model_version: string | null;
   estimated_at: string | null;
+  feedback: PassageFeedback | null;
+  feedback_at: string | null;
   created_at: string;
 }
