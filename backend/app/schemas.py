@@ -163,11 +163,17 @@ class PassageFrameOut(BaseModel):
     error: Optional[str]
 
 
+PASSAGE_MODES = ["fixed", "handheld"]
+FEEDBACK_VALUES = ["ok", "low", "high"]
+
+
 class PassageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
-    capture_point_id: str
+    mode: str = "fixed"
+    capture_point_id: Optional[str]
     animal_id: Optional[str]
+    category: Optional[str] = None
     ear_tag: Optional[str]
     lot: Optional[str]
     started_at: datetime
@@ -183,7 +189,15 @@ class PassageOut(BaseModel):
     n_frames_used: int
     model_version: Optional[str]
     estimated_at: Optional[datetime]
+    feedback: Optional[str] = None
+    feedback_at: Optional[datetime] = None
     created_at: datetime
+
+
+class PassageFeedbackIn(BaseModel):
+    """Resposta a "Saiu como esperado?": ok, low (achei baixo) ou high (achei alto)."""
+
+    feedback: Optional[str] = Field(default=None, pattern="^(ok|low|high)$")
 
 
 class PassageDetailOut(PassageOut):

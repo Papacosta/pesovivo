@@ -154,10 +154,14 @@ class Passage(Base):
     __tablename__ = "passages"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    capture_point_id: Mapped[str] = mapped_column(
-        ForeignKey("capture_points.id"), nullable=False, index=True
+    # fixed = celular fixo no corredor | handheld = celular na mão (sem ponto)
+    mode: Mapped[str] = mapped_column(String(20), nullable=False, default="fixed", server_default="fixed")
+    capture_point_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("capture_points.id"), nullable=True, index=True
     )
     animal_id: Mapped[Optional[str]] = mapped_column(ForeignKey("animals.id"), index=True)
+    # Categoria escolhida antes da foto (usada quando o animal não tem cadastro).
+    category: Mapped[Optional[str]] = mapped_column(String(30))
     ear_tag: Mapped[Optional[str]] = mapped_column(String(60), index=True)
     lot: Mapped[Optional[str]] = mapped_column(String(60), index=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
@@ -176,10 +180,13 @@ class Passage(Base):
     n_frames_used: Mapped[int] = mapped_column(Integer, default=0)
     model_version: Mapped[Optional[str]] = mapped_column(String(60))
     estimated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Retorno do produtor: "Saiu como esperado?" -> ok | low (achou baixo) | high (achou alto)
+    feedback: Mapped[Optional[str]] = mapped_column(String(20), index=True)
+    feedback_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
     animal: Mapped[Optional[Animal]] = relationship()
-    capture_point: Mapped[CapturePoint] = relationship()
+    capture_point: Mapped[Optional[CapturePoint]] = relationship()
     frames: Mapped[list["PassageFrame"]] = relationship(
         back_populates="passage",
         cascade="all, delete-orphan",

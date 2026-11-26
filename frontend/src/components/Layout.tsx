@@ -11,7 +11,7 @@ interface LayoutProps {
 /** Navegação principal. `match` inclui telas filhas (ex.: Modelo fica em Painel). */
 export const NAV = [
   { path: "/", label: "Início", icon: "home", match: ["/"] },
-  { path: "/passagem", label: "Pesar", icon: "scale", match: ["/passagem"] },
+  { path: "/passagem", label: "Pesar", icon: "scale", match: ["/passagem", "/na-mao"] },
   { path: "/coletar", label: "Coletar", icon: "camera", match: ["/coletar"] },
   { path: "/painel", label: "Painel", icon: "chart", match: ["/painel", "/modelo"] },
   { path: "/animais", label: "Animais", icon: "tag", match: ["/animais"] },

@@ -25,6 +25,17 @@ export function formatNumber(value: number | null | undefined, digits = 1): stri
   return value.toLocaleString("pt-BR", { maximumFractionDigits: digits });
 }
 
+/** Peso de 1 arroba (@) de carcaça, em kg. */
+export const ARROBA_KG = 15;
+
+/**
+ * Peso vivo -> arrobas de carcaça: peso × rendimento ÷ 15.
+ * Ex.: 340 kg com 50% de rendimento = 11,3 @.
+ */
+export function carcassArrobas(liveWeightKg: number, yieldPct: number): number {
+  return (liveWeightKg * (yieldPct / 100)) / ARROBA_KG;
+}
+
 export const CATEGORY_LABELS: Record<string, string> = {
   bezerro: "Bezerro",
   novilha: "Novilha",

@@ -3,15 +3,17 @@
  * corredor ou brete. O app aprende o fundo vazio, detecta cada animal que
  * passa, fotografa sozinho os melhores quadros e envia para estimar o peso.
  */
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, apiError } from "../api";
 import { startCamera, stopCamera, captureFrame } from "../sensors";
 import { quickQuality } from "../lib/imageQuality";
 import { cacheGet, cacheSet, enqueue, localSettings, onQueueChange, queueItems, syncQueue } from "../lib/queue";
-import { formatDateTime, uuid } from "../lib/format";
+import { uuid } from "../lib/format";
 import { showToast } from "../lib/toast";
 import { setUnsavedWork } from "../lib/navGuard";
 import PageHeader from "../components/PageHeader";
+import CategoryPicker from "../components/CategoryPicker";
+import PassageResults from "../components/PassageResults";
 import {
   DEFAULT_DETECTOR_CONFIG,
   PassageTracker,
@@ -47,6 +49,7 @@ export default function Passagem() {
   const [points, setPoints] = useState<CapturePoint[]>(() => cacheGet<CapturePoint[]>("capturePoints", []));
   const [capturePointId, setCapturePointId] = useState<string>(localSettings.capturePointId ?? "");
   const [lot, setLot] = useState<string>(() => cacheGet<string>("passageLot", ""));
+  const [category, setCategory] = useState<string>(localSettings.passageCategory);
   const [tagInput, setTagInput] = useState("");
 
   const [cameraReady, setCameraReady] = useState(false);
@@ -75,8 +78,8 @@ export default function Passagem() {
   const passageIdRef = useRef<string>(uuid());
   const startedAtRef = useRef<string>(new Date().toISOString());
   const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
-  const settingsRef = useRef({ capturePointId, lot });
-  settingsRef.current = { capturePointId, lot };
+  const settingsRef = useRef({ capturePointId, lot, category });
+  settingsRef.current = { capturePointId, lot, category };
 
   // ---------------- dados ----------------
   const refreshHistory = useCallback(() => {
@@ -109,6 +112,10 @@ export default function Passagem() {
   useEffect(() => {
     cacheSet("passageLot", lot);
   }, [lot]);
+
+  useEffect(() => {
+    localSettings.passageCategory = category;
+  }, [category]);
 
   // ---------------- câmera ----------------
   useEffect(() => {
@@ -184,12 +191,14 @@ export default function Passagem() {
         );
         return;
       }
-      const { capturePointId: cp, lot: currentLot } = settingsRef.current;
+      const { capturePointId: cp, lot: currentLot, category: cat } = settingsRef.current;
       await enqueue({
         kind: "passage",
         id: passageId,
         createdAt: Date.now(),
+        mode: "fixed",
         capturePointId: cp,
+        category: cat || null,
         startedAt,
         endedAt: new Date(endedAtMs).toISOString(),
         earTag: tag,
@@ -462,7 +471,11 @@ export default function Passagem() {
             <input id="ps-lote" type="text" value={lot} onChange={(e) => setLot(e.target.value)} placeholder="Ex.: Lote 3 – engorda" aria-describedby="ps-lote-ajuda" />
             <span id="ps-lote-ajuda" className="field-hint">Opcional. Ajuda a separar os resultados.</span>
           </div>
+          <CategoryPicker id="ps-cat" value={category} onChange={setCategory} />
         </div>
+        <p className="small muted" style={{ margin: "10px 0 0" }}>
+          Sem corredor ou tripé? <a href="#/na-mao">Pese com o celular na mão</a>.
+        </p>
       </section>
 
       {cameraError && (
@@ -591,51 +604,15 @@ export default function Passagem() {
             Calcular peso de {pendingCount} passagem(ns) sem estimativa
           </button>
         )}
-        <ul className="list">
-          {queuedPassages.map((q) => (
-            <li key={q.id}>
-              <div>
-                <div style={{ fontWeight: 600 }}>Salvo no celular</div>
-                <div style={subStyle}>
-                  {formatDateTime(q.startedAt)} · {q.earTag ? `brinco ${q.earTag}` : "sem brinco"} · {q.frames} foto(s)
-                </div>
-              </div>
-              <span className="badge badge-neutral">aguardando envio</span>
-            </li>
-          ))}
-          {history.map((p) => (
-            <li key={p.id}>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: "1.1rem" }}>
-                  {p.weight_kg !== null ? `${p.weight_kg.toFixed(0)} kg ± ${(p.interval_half_width_kg ?? 0).toFixed(0)}` : "Peso ainda não calculado"}
-                </div>
-                <div style={subStyle}>
-                  {formatDateTime(p.started_at)} · {p.ear_tag ? `brinco ${p.ear_tag}` : "sem brinco"}
-                  {p.lot ? ` · ${p.lot}` : ""} · {p.n_frames_used} de {p.n_frames} fotos usadas
-                </div>
-                {p.message && <div style={{ ...subStyle, color: "var(--warning)" }}>{p.message}</div>}
-              </div>
-              <span className={`badge ${p.status === "estimated" ? "badge-ok" : p.status === "failed" ? "badge-danger" : "badge-neutral"}`}>
-                {STATUS_LABEL[p.status] ?? p.status}
-              </span>
-            </li>
-          ))}
-          {history.length === 0 && queuedPassages.length === 0 && (
-            <li className="small muted">Nenhum animal pesado ainda.</li>
-          )}
-        </ul>
+        <PassageResults
+          history={history}
+          queued={queuedPassages}
+          onChanged={(up) => setHistory((list) => list.map((p) => (p.id === up.id ? up : p)))}
+        />
       </section>
     </div>
   );
 }
-
-const STATUS_LABEL: Record<string, string> = {
-  estimated: "estimado",
-  pending_model: "aguardando modelo",
-  failed: "não foi possível",
-};
-
-const subStyle: CSSProperties = { fontSize: "0.85rem", color: "var(--text-muted)" };
 
 function emptyMetrics(): FrameMetrics {
   return { foreground: 0, motion: 0, box: null, fullyInside: false, offCenter: 1 };

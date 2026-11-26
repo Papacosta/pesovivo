@@ -9,12 +9,14 @@ import Pontos from "./pages/Pontos";
 import Ajustes from "./pages/Ajustes";
 import Modelo from "./pages/Modelo";
 import Passagem from "./pages/Passagem";
+import NaMao from "./pages/NaMao";
 import { APP_NAME } from "./lib/brand";
 import { unsavedWork, setUnsavedWork } from "./lib/navGuard";
 
 const PAGES: Record<string, { title: string; render: () => JSX.Element }> = {
   "/": { title: "Início", render: () => <Home /> },
   "/passagem": { title: "Pesar animais", render: () => <Passagem /> },
+  "/na-mao": { title: "Pesar na mão", render: () => <NaMao /> },
   "/coletar": { title: "Coletar com balança", render: () => <NovaColeta /> },
   "/painel": { title: "Painel", render: () => <Painel /> },
   "/animais": { title: "Animais", render: () => <Animais /> },

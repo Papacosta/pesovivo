@@ -18,6 +18,9 @@ import {
 
 export default function Ajustes() {
   const [maxTilt, setMaxTilt] = useState(localSettings.maxTilt);
+  const [carcassYield, setCarcassYield] = useState(localSettings.carcassYield);
+  const [phoneHeight, setPhoneHeight] = useState(localSettings.phoneHeightCm);
+  const [focalEq, setFocalEq] = useState(localSettings.focalEqMm);
   const [pending, setPending] = useState(0);
   const [health, setHealth] = useState<"verificando" | "online" | "offline">("verificando");
   const [diag, setDiag] = useState<string[]>([]);
@@ -139,6 +142,84 @@ export default function Ajustes() {
             style={{ flex: 1 }}
           />
           <strong style={{ minWidth: 48 }} aria-hidden="true">{maxTilt}°</strong>
+        </div>
+      </section>
+
+      <section className="card" aria-labelledby="aj-namao">
+        <h2 id="aj-namao" className="card-title" style={{ marginTop: 0 }}>Foto na mão</h2>
+        <p className="small muted" id="altura-ajuda">
+          Altura em que você segura o celular ao fotografar (do chão até o celular). O app usa isso para calcular a
+          distância até o animal. Meça uma vez: na altura do peito costuma dar entre 120 e 150 cm.
+        </p>
+        <div className="field" style={{ marginTop: 8, maxWidth: 220 }}>
+          <label htmlFor="altura-celular" className="field-label">Altura do celular (cm)</label>
+          <input
+            id="altura-celular"
+            type="number"
+            inputMode="numeric"
+            min={60}
+            max={220}
+            value={phoneHeight}
+            aria-describedby="altura-ajuda"
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setPhoneHeight(v);
+              if (v >= 60 && v <= 220) localSettings.phoneHeightCm = v;
+            }}
+          />
+        </div>
+        <details style={{ marginTop: 8 }}>
+          <summary className="small">Avançado: lente da câmera</summary>
+          <p className="small muted" id="lente-ajuda" style={{ marginTop: 0 }}>
+            Lente principal em milímetros equivalentes. A maioria dos celulares usa 24 a 28 mm (padrão 26). Só mude se
+            souber o valor do seu aparelho.
+          </p>
+          <div className="field" style={{ maxWidth: 220 }}>
+            <label htmlFor="lente" className="field-label">Lente (mm equivalentes)</label>
+            <input
+              id="lente"
+              type="number"
+              inputMode="decimal"
+              min={13}
+              max={50}
+              step={0.5}
+              value={focalEq}
+              aria-describedby="lente-ajuda"
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setFocalEq(v);
+                if (v >= 13 && v <= 50) localSettings.focalEqMm = v;
+              }}
+            />
+          </div>
+        </details>
+      </section>
+
+      <section className="card" aria-labelledby="aj-rendimento">
+        <h2 id="aj-rendimento" className="card-title" style={{ marginTop: 0 }}>Rendimento de carcaça</h2>
+        <p className="small muted" id="rend-ajuda">
+          Usado para mostrar o resultado em arrobas: peso vivo × rendimento ÷ 15. Boi gordo costuma render 50% a 54%;
+          vaca, 46% a 50%.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+          <label htmlFor="rendimento" className="sr-only">Rendimento de carcaça em porcentagem</label>
+          <input
+            id="rendimento"
+            type="range"
+            min={40}
+            max={60}
+            step={0.5}
+            value={carcassYield}
+            aria-describedby="rend-ajuda"
+            aria-valuetext={`${carcassYield} por cento`}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setCarcassYield(v);
+              localSettings.carcassYield = v;
+            }}
+            style={{ flex: 1 }}
+          />
+          <strong style={{ minWidth: 56 }} aria-hidden="true">{carcassYield.toLocaleString("pt-BR")}%</strong>
         </div>
       </section>
 

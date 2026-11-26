@@ -31,6 +31,20 @@ Z80 = 1.28
 # todos são quase idênticos (MAD ~ 0).
 MIN_REL_SIGMA = 0.02
 OUTLIER_SIGMAS = 3.0
+# Celular na mão: distância e ângulo variam a cada foto e o modelo foi
+# treinado com o celular fixo. A faixa do modelo é alargada nesse modo.
+HANDHELD_INTERVAL_FACTOR = 1.5
+HANDHELD_WARNING = (
+    "Foto na mão: distância estimada pelo ângulo do celular, faixa de erro maior. "
+    "Para mais precisão, use o celular fixo no corredor."
+)
+
+
+def passage_half_width(model_half_width: float, mode: str) -> float:
+    """Faixa do modelo ajustada ao modo de captura da passagem."""
+    if mode == "handheld":
+        return float(model_half_width) * HANDHELD_INTERVAL_FACTOR
+    return float(model_half_width)
 
 
 @dataclass
@@ -105,16 +119,21 @@ def aggregate_estimates(
     )
 
 
-def _animal_dict(animal: Optional[Animal]) -> Dict[str, Any]:
-    if not animal:
-        return {}
-    return {
-        "breed": animal.breed,
-        "sex": animal.sex,
-        "category": animal.category,
-        "age_months": animal.age_months,
-        "bcs": animal.bcs,
-    }
+def animal_features(animal: Optional[Animal], category: Optional[str] = None) -> Dict[str, Any]:
+    """Dados do cadastro para o modelo. A categoria escolhida antes da foto
+    só entra quando o cadastro do animal não tem categoria."""
+    info: Dict[str, Any] = {}
+    if animal:
+        info = {
+            "breed": animal.breed,
+            "sex": animal.sex,
+            "category": animal.category,
+            "age_months": animal.age_months,
+            "bcs": animal.bcs,
+        }
+    if not info.get("category") and category:
+        info["category"] = category
+    return info
 
 
 def estimate_passage(db, passage: Passage) -> Passage:
@@ -124,29 +143,43 @@ def estimate_passage(db, passage: Passage) -> Passage:
     passagem seja reestimada quando houver modelo ativo.
     """
     try:
-        ctx = EstimationContext(db, passage.capture_point_id)
+        ctx = EstimationContext(db, passage.capture_point_id, passage.mode)
     except EstimationUnavailableError as exc:
         passage.status = "pending_model"
         passage.message = str(exc)
         return passage
 
-    animal_info = _animal_dict(passage.animal)
+    animal_info = animal_features(passage.animal, passage.category)
     weights: List[Optional[float]] = []
+    distances: List[float] = []
     for frame in passage.frames:
         frame.weight_kg = None
         frame.error = None
         try:
             raw = photo_abs_path(frame.file_path).read_bytes()
             image = decode_image(raw)
-            result = ctx.estimate(image, animal_info, reject_border=True)
+            camera = (frame.detection or {}).get("camera")
+            result = ctx.estimate(image, animal_info, reject_border=True, camera=camera)
             frame.weight_kg = round(result["weight_kg"], 1)
+            if result.get("geometry"):
+                frame.quality = {**(frame.quality or {}), "geometry": result["geometry"]}
+                distances.append(result["geometry"]["ground_distance_cm"])
         except EstimationUnavailableError as exc:
             frame.error = str(exc)
         except Exception as exc:  # um quadro ruim não derruba a passagem
             frame.error = f"Falha ao processar quadro: {exc}"
         weights.append(frame.weight_kg)
 
-    agg = aggregate_estimates(weights, ctx.half_width)
+    agg = aggregate_estimates(weights, passage_half_width(ctx.half_width, passage.mode))
+    if passage.mode == "handheld":
+        agg.warnings.insert(0, HANDHELD_WARNING)
+        if distances:
+            agg.warnings.insert(0, f"Animal a cerca de {np.median(distances) / 100:.0f} m.")
+        elif agg.weight_kg is None:
+            # Sem nenhum quadro válido: mostra o motivo do primeiro quadro.
+            first_error = next((f.error for f in passage.frames if f.error), None)
+            if first_error:
+                agg.warnings.insert(0, first_error)
     for frame, used in zip(passage.frames, agg.used_mask):
         frame.used = used
 

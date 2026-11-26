@@ -492,3 +492,30 @@ main {
     scroll-behavior: auto !important;
   }
 }
+
+/* Grupo de escolha única em botões (categoria, "Saiu como esperado?") */
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.chip[aria-pressed="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

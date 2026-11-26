@@ -71,7 +71,8 @@ export default function Home() {
             pese na balança e tire as fotos. O app aprende com essas pesagens (meta: 30 animais).
           </Step>
           <Step done={modelActive} href="#/passagem" label="Pese sem balança">
-            com o modelo treinado, o celular estima o peso de cada animal que passa.
+            com o modelo treinado, o celular estima o peso de cada animal que passa. Sem corredor?{" "}
+            <a href="#/na-mao">Pese com o celular na mão</a>.
           </Step>
         </ol>
       </section>

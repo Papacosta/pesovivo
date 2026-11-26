@@ -144,3 +144,44 @@ def test_format_interval():
     assert w == 412.0
     assert lo == 387.4
     assert hi == 436.6
+
+
+def test_modelo_portatil_usa_medidas_em_cm():
+    from app.services.estimator import PORTABLE_FEATURE_NAMES
+
+    rows, y, groups = synthetic_dataset()
+    # Medidas em cm proporcionais ao "tamanho" do animal; norm. viram lixo
+    # (como numa foto na mão com distância e zoom diferentes).
+    for r in rows:
+        size = r["length_norm"]
+        r.update(
+            length_cm=size * 200.0,
+            body_height_cm=size * 130.0,
+            thorax_height_cm=size * 70.0,
+            area_m2=size * size * 1.6,
+            length_norm=RNG.uniform(0.1, 0.9),
+            area_norm=RNG.uniform(0.01, 0.5),
+        )
+    est = create_estimator("ridge", feature_set="portable")
+    metrics = est.cross_validate(rows, y, groups)
+    est.fit(rows, y)
+    assert est.feature_names == PORTABLE_FEATURE_NAMES
+    assert metrics["mae_kg"] < 25
+
+
+def test_build_feature_row_converte_para_cm():
+    feats = {name: 0.5 for name in MASK_FEATURE_NAMES}
+    feats.update(length_px=1000.0, body_height_px=600.0, thorax_height_px=300.0, area_px=400000.0)
+    row = build_feature_row(feats, cm_per_px=0.2)
+    assert row["length_cm"] == pytest.approx(200.0)
+    assert row["area_m2"] == pytest.approx(400000 * 0.04 / 10000)
+    assert build_feature_row(feats)["length_cm"] is None
+
+
+def test_artefato_antigo_sem_lista_de_features_continua_funcionando():
+    from app.services.estimator import FeatureEncoder
+
+    rows, y, _ = synthetic_dataset(n_animals=5, photos_per_animal=1)
+    enc = FeatureEncoder().fit(rows)
+    del enc.numeric  # simula pickle de versão anterior
+    assert enc.transform(rows).shape[1] == enc.output_dim

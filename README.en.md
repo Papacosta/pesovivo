@@ -80,6 +80,7 @@ flowchart LR
 - ✅ **Phase 1 (standardized data collection):** photos, sensors, real weighings, dashboard,
   CSV/ZIP export.
 - ✅ **Walk-through mode:** automatic capture and per-animal estimates.
+- ✅ **Handheld mode:** one tap, from a distance with 1×–5× zoom, no distance input: it is estimated from the phone angle and the hoof line ([`geometry.py`](backend/app/services/geometry.py)) and a "portable" model uses measurements in cm (error band 1.5× wider); category picked before the photo, result in **carcass arrobas** and a "Did it match what you expected?" question.
 - ✅ **Phase 2 (estimation):** the pipeline is built and tested. **The model is activated only
   after enough real weighings are collected** (at least 30 animals). There are no field
   accuracy numbers yet.

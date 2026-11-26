@@ -70,6 +70,7 @@ flowchart LR
 
 - ✅ **Fase 1 — coleta padronizada:** fotos, sensores, pesagens reais, painel, exportação CSV/ZIP.
 - ✅ **Modo passagem:** captura automática e estimativa por animal.
+- ✅ **Modo na mão:** um toque, de longe e com zoom 1×–5×, sem informar distância: ela é estimada pelo ângulo do celular e pela linha dos cascos ([`geometry.py`](backend/app/services/geometry.py)) e um modelo "portátil" usa medidas em cm (faixa de erro 1,5× maior); categoria escolhida antes da foto, resultado em **arrobas de carcaça** e pergunta "Saiu como esperado?".
 - ✅ **Fase 2 — estimativa:** pipeline pronto e testado; **o modelo só é ativado depois de
   coletar pesagens reais suficientes** (mínimo de 30 animais). Ainda não há números de precisão
   com dados de campo.
