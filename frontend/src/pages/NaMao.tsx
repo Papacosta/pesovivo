@@ -30,6 +30,7 @@ import { uuid } from "../lib/format";
 import { showToast } from "../lib/toast";
 import { cameraPitchDeg, cameraRollDeg, screenAngle } from "../lib/handheldGeometry";
 import PageHeader from "../components/PageHeader";
+import WeighModeBar from "../components/WeighModeBar";
 import CategoryPicker from "../components/CategoryPicker";
 import PassageResults, { type QueuedPassageSummary } from "../components/PassageResults";
 import type { Passage, PassageQueuedFrame } from "../types";
@@ -303,6 +304,8 @@ export default function NaMao() {
         title="Pesar na mão"
         description="Fotografe o animal de lado, de onde você estiver. Use o zoom se ele estiver longe. Um toque basta."
       />
+      <WeighModeBar current="na-mao" />
+
 
       <section className="card" aria-labelledby="nm-animal">
         <h2 id="nm-animal" className="card-title" style={{ marginTop: 0 }}>1. Animal</h2>

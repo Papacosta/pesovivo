@@ -519,3 +519,40 @@ main {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+/* Escolha do modo de pesar (topo da tela Pesar) */
+.mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 6px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.mode-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+  border-radius: calc(var(--radius) - 4px);
+  color: var(--text);
+  text-decoration: none;
+  border: 2px solid transparent;
+}
+.mode-option[aria-current="page"] {
+  background: var(--primary);
+  color: #fff;
+}
+.mode-option:not([aria-current="page"]):hover {
+  border-color: var(--border);
+}
+.mode-label {
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+.mode-hint {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}

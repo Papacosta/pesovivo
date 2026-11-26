@@ -12,6 +12,7 @@ import { uuid } from "../lib/format";
 import { showToast } from "../lib/toast";
 import { setUnsavedWork } from "../lib/navGuard";
 import PageHeader from "../components/PageHeader";
+import WeighModeBar from "../components/WeighModeBar";
 import CategoryPicker from "../components/CategoryPicker";
 import PassageResults from "../components/PassageResults";
 import {
@@ -428,9 +429,11 @@ export default function Passagem() {
   return (
     <div>
       <PageHeader
-        title="Pesar animais"
+        title="Pesar no corredor"
         description="Deixe o celular fixo no tripé, de lado para o corredor. O app fotografa sozinho cada animal que passar e estima o peso."
       />
+      <WeighModeBar current="passagem" />
+
 
       <section className="card" aria-labelledby="ps-config">
         <h2 id="ps-config" className="card-title" style={{ marginTop: 0 }}>1. Antes de começar</h2>
@@ -473,9 +476,6 @@ export default function Passagem() {
           </div>
           <CategoryPicker id="ps-cat" value={category} onChange={setCategory} />
         </div>
-        <p className="small muted" style={{ margin: "10px 0 0" }}>
-          Sem corredor ou tripé? <a href="#/na-mao">Pese com o celular na mão</a>.
-        </p>
       </section>
 
       {cameraError && (

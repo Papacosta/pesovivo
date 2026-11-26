@@ -188,6 +188,13 @@ export const localSettings = {
   set focalEqMm(value: number) {
     localStorage.setItem("gado:focalEqMm", String(value));
   },
+  /** Modo de pesar usado por último: o app abre direto nele. */
+  get weighMode(): "na-mao" | "passagem" {
+    return localStorage.getItem("gado:weighMode") === "passagem" ? "passagem" : "na-mao";
+  },
+  set weighMode(value: "na-mao" | "passagem") {
+    localStorage.setItem("gado:weighMode", value);
+  },
   /** Categoria escolhida por último antes de pesar. */
   get passageCategory(): string {
     return localStorage.getItem("gado:passageCategory") ?? "";
